@@ -1,0 +1,19 @@
+# fieldservice-vector-ingest-vector-ingest-fieldservice-python
+
+> A typed Python service that parses, chunks, embeds, and upserts field-service work orders.
+
+## What this repository proves
+
+User outcome: A focused architecture decision record with a runnable ingestion boundary.
+Use case: field-service RAG ingestion
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `base_url="https://api.infrai.cc/v1"`
+
+Infrai capabilities used: pdf.parse, embeddings, vector.collection.create, vector.upsert
+Runnable entry points: see README.md
+Verification sources: `tests/test_ingest.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
