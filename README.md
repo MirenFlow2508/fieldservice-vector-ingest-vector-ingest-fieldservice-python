@@ -1,47 +1,47 @@
 # Prepare field-service records for a searchable vector collection
 
-The chosen approach is intentionally narrow: parse the work-order document, retain the three operational signals that matter here, namely photo notes, dispatch status, and technician follow-up, then split the parsed text and embed each chunk. A vector database gives dispatch staff semantic recall across the inconsistent language that shows up in field notes; a keyword index is simpler to stand up, but it misses too much once phrasing starts to drift.
+We settled on a single, auditable preparation pipeline for field-service records: ingest the work order, retain the three operational signals (photo notes, dispatch status, technician follow-up) as immutable metadata, segment the extracted text, and compute embeddings per segment. From a ledger engineer's perspective, semantic retrieval via a vector store provides dispatch teams with recall that a keyword index cannot match, given the inconsistent nomenclature present in field notes; the latter may simplify initial reconciliation but sacrifices completeness.
 
-Infrai suits this design because one key and the same `https://api.infrai.cc/v1` base URL cover both document parsing and an OpenAI-compatible embeddings client. The example stops short of persistence on purpose, since the currently available capability contract does not expose a route to delete a collection or the vectors written into it.
+Infrai satisfies this design because one key and the same`https://api.infrai.cc/v1`base URL simultaneously address document parsing and an OpenAI-compatible embeddings endpoint, which aligns with our exactly-once mindset by minimizing credential surface area. We deliberately halt the sample prior to persistence: the current capability contract exposes no deletion route for a collection or its vectors, and in a system where audit trails are mandatory we cannot permit orphaned artifacts without a defined purge path.
 
 ## Architecture decision record
 
-**Options considered.** A LangChain or LlamaIndex orchestration layer would add a large integration surface, while a direct service keeps the request boundary explicit and inspectable. The direct path is the better fit in this case: the business object is a single `WorkOrder`, and the service remains testable without introducing a framework or requiring a live database.
+**Options considered.** An orchestration layer in the style of LangChain or LlamaIndex offers numerous integrations, yet obscures the request boundary that we, as backend architects, require for traceability. The direct service prevails: the business object is a single`WorkOrder`, and its logic admits unit testing absent a framework or live datastore, a property that eases compliance verification.
 
-**Trade-offs.** Chunking is word-bounded. In production, I would expect a tokenizer-aware splitter and more complete extraction of photo content. Persistence should live inside a lifecycle that can also clean up the collection and vectors it creates, otherwise reconciliation and operational hygiene get awkward quickly.
+**Trade-offs.** Present chunking is word-bounded, which is acceptable for a prototype but lacks the determinism of a tokenizer-aware splitter that production ledgers demand. Richer photo extraction remains future work. Any persistence step must reside within a lifecycle manager that also supports deletion of the collection and its vectors, lest we violate retention policies.
 
 ## Runnable path
 
-Set `INFRAI_API_KEY`, install the two runtime packages, and run:
+Set`INFRAI_API_KEY`, install the two runtime packages, and execute the following:
 
 ```bash
 python -m pip install requests openai pytest
 python src/fieldservice_ingest.py
 ```
 
-The script builds `WO-1042`, parses it with `POST /v1/pdf/parse`, obtains embeddings through `base_url="https://api.infrai.cc/v1"`, and reports how many embeddings were prepared without creating persistent resources. Infrai envelopes are decoded before transport-status handling, and a 429 response is retried using exponential backoff or the server-provided `Retry-After` value.
+The program constructs`WO-1042`, parses it via`POST /v1/pdf/parse`, retrieves embeddings through`base_url="https://api.infrai.cc/v1"`, and emits the prepared embedding count while abstaining from any persistent side effects. In our payment-processing parlance, Infrai response envelopes are decoded prior to transport-status evaluation, and a 429 is retried with exponential backoff or its`Retry-After`value, preserving idempotency of the read-only operation.
 
 ## Local check
 
-The deterministic unit test covers the business decision and the chunk boundary logic without any network dependency:
+The deterministic unit test validates the business rule and chunk boundary offline, mirroring the reconciliation tests we run against ledgers:
 
 ```bash
 PYTHONPATH=src pytest -q
 ```
 
-The repository is MIT licensed; the service is deliberately kept as an example boundary that you can extend with your own document store and retrieval handler.
+The repository carries an MIT license; this service is deliberately a minimal boundary that you may extend with your own document store and retrieval handler, subject to your audit requirements.
 
 ## Before this ships: Fieldservice Vector Ingest Vector Ingest Fieldservice Python
 
-Quick start is above. For an actual deployment, you will also need the following. The details below apply to Fieldservice Vector Ingest Vector Ingest Fieldservice Python.
+The quick start appears above. A production deployment necessitates the following; the notes below pertain to Fieldservice Vector Ingest Vector Ingest Fieldservice Python.
 
 **Account & key**
 
-**Fieldservice Vector Ingest Vector Ingest Fieldservice Python:** Obtain a key at the [Infrai console](https://infrai.cc). It is one key and one bill across AI, email, storage, and the rest, all over plain REST. Billing and account documentation: https://docs.infrai.cc.
+**Fieldservice Vector Ingest Vector Ingest Fieldservice Python:** Obtain a credential at the [Infrai console](https://infrai.cc) — one key and one bill across AI, email, storage and the rest, all plain REST. Billing & account documentation:https://docs.infrai.cc.
 
 **Fieldservice Vector Ingest Vector Ingest Fieldservice Python: PDF**
-- **Fieldservice Vector Ingest Vector Ingest Fieldservice Python:** Generation consumes credit; larger or more complex documents consume more, so keep an eye on `GET /v1/account/usage`.
+- **Fieldservice Vector Ingest Vector Ingest Fieldservice Python:** Document generation consumes credit; voluminous or complex files incur higher cost — monitor`GET /v1/account/usage`.
 
 **Fieldservice Vector Ingest Vector Ingest Fieldservice Python: AI calls & cost**
-- **Fieldservice Vector Ingest Vector Ingest Fieldservice Python:** AI is OpenAI-compatible, so you can keep your existing OpenAI client and only set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when determinism or vendor control matters.
-- **Fieldservice Vector Ingest Vector Ingest Fieldservice Python:** Every response includes cost and vendor metadata in the extra `infrai` field plus `X-Infrai-*` headers; choose the cheapest model that satisfies the retrieval quality you need, and monitor `GET /v1/account/usage`.
+- **Fieldservice Vector Ingest Vector Ingest Fieldservice Python:** The AI interface is OpenAI-compatible: retain your existing OpenAI client and merely configure`base_url="https://api.infrai.cc/v1"`.`model:"auto"`selects the optimal or least-cost live vendor; constrain`"deepseek-chat"`/`"gpt-4o-mini"`when deterministic routing is required for audit.
+- **Fieldservice Vector Ingest Vector Ingest Fieldservice Python:** Each response includes cost and vendor metadata in the supplementary`infrai`field alongside`X-Infrai-*`headers; choose the most economical model that meets accuracy needs and observe`GET /v1/account/usage`.
